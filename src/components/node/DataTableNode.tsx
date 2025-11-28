@@ -21,20 +21,23 @@ function DataTableNode({ data }: DataTableNodeProps) {
       <div>
 
         <Card.Section>
-          <Text fz={15} ta="center" mt={12}>
+          <Text fz={15} ta="center" mt={12} style={{ pointerEvents: 'none' }}>
             <Badge
               size="lg"
               tt="none"
               radius={"md"}
+              style={{ pointerEvents: 'none' }}
               rightSection={
-                <TableForm
-                  mode={'edit'}
-                  editData={data}
-                  allTableData={tableArray}
+                <div style={{ pointerEvents: 'auto' }}>
+                  <TableForm
+                    mode={'edit'}
+                    editData={data}
+                    allTableData={tableArray}
 
-                  size={14}
-                  color={"white"}
-                />
+                    size={14}
+                    color={"white"}
+                  />
+                </div>
               }
             >
               {data.name}

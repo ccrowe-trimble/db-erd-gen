@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import ReactFlow, { 
-    Controls,
-    Background,
-    applyNodeChanges,
-    applyEdgeChanges,
-    NodeChange,
-    EdgeChange,
-    Panel,
-    Node,
-    Edge,
+import ReactFlow, {
+  Controls,
+  Background,
+  applyNodeChanges,
+  applyEdgeChanges,
+  NodeChange,
+  EdgeChange,
+  Panel,
+  Node,
+  Edge,
+  MiniMap,
 } from 'reactflow';
 import DataTableNode from './node/DataTableNode';
+import CustomEdge from './edges/CustomEdge';
 import { Badge, Group } from '@mantine/core';
 
 import { inputDataToNodeAndEdges } from '../utilis/inputData/inputDataToNode';
@@ -21,73 +23,76 @@ import DownloadButton from './leftBar/components/DownloadButton';
 import ReloadButton from './leftBar/components/ReloadButton';
 
 interface ERTableProps {
-    tableArray: Table[]
-    updateTablePositions?: (tableName: string, position: TablePosition) => void 
+  tableArray: Table[]
+  updateTablePositions?: (tableName: string, position: TablePosition) => void
 }
 
-function ERTableComp({ tableArray, updateTablePositions }: ERTableProps){
+function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
 
-    const update = useTableStore((state) => state.update);
+  const update = useTableStore((state) => state.update);
 
-    const [nodes, setNodes] = useState<Node<any>[]>([]);
-    const [edges, setEdges] = useState<Edge<any>[]>([]);
+  const [nodes, setNodes] = useState<Node<any>[]>([]);
+  const [edges, setEdges] = useState<Edge<any>[]>([]);
 
-    useEffect(() => {
-        const testData = inputDataToNodeAndEdges(tableArray);
-        
-        setNodes(testData.nodes);
-        setEdges(testData.edges);
+  useEffect(() => {
+    const testData = inputDataToNodeAndEdges(tableArray);
 
-    }, [tableArray, update]);
+    setNodes(testData.nodes);
+    setEdges(testData.edges);
 
-    const onNodesChange = useCallback(
-        (changes: NodeChange[]) => {
-            setNodes((nds) => applyNodeChanges(changes, nds))
-        },[]
-    );
+  }, [tableArray, update]);
 
-    const onNodeDragStop = useCallback(
-        (_: React.MouseEvent, node: Node,) => {          
-            !!updateTablePositions && updateTablePositions(node.data.name, node.position);
-        },[]
-    );
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      setNodes((nds) => applyNodeChanges(changes, nds))
+    }, []
+  );
 
-    const onEdgesChange = useCallback(
-        (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
-        [setEdges, tableArray]
-    );
+  const onNodeDragStop = useCallback(
+    (_: React.MouseEvent, node: Node,) => {
+      !!updateTablePositions && updateTablePositions(node.data.name, node.position);
+    }, []
+  );
 
-    const nodeTypes = useMemo(() => ({ textUpdater: DataTableNode }), []);
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
+    [setEdges, tableArray]
+  );
 
-    return (
-        <div style={{ height: '100%', width: "100%", marginTop: "5vh" }}>
-        <ReactFlow 
-            nodes={nodes}
-            edges={edges}
-            
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onNodeDragStop={onNodeDragStop}
+  const nodeTypes = useMemo(() => ({ textUpdater: DataTableNode }), []);
+  const edgeTypes = useMemo(() => ({ custom: CustomEdge }), []);
 
-            nodeTypes={nodeTypes}
-        >
-            <Background />
-            <Controls />
-            {/* <MiniMap  pannable zoomable/> */}
+  return (
+    <div style={{ height: '100%', width: "100%", marginTop: "5vh" }}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
 
-            <Panel position="top-right">
-                <Group mt={8}>
-                    <Badge radius="sm" variant='light' color="green" tt="none">
-                        Table count: {nodes.length}
-                    </Badge>
-                    
-                    {!!updateTablePositions && <DownloadButton />}
-                    <ReloadButton />
-                </Group>
-            </Panel>
-        </ReactFlow>
-        </div>
-    )
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeDragStop={onNodeDragStop}
+
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        edgesUpdatable={true}
+      >
+        <Background />
+        <Controls />
+        <MiniMap pannable zoomable />
+
+        <Panel position="top-right">
+          <Group mt={8}>
+            <Badge radius="sm" variant='light' color="green" tt="none">
+              Table count: {nodes.length}
+            </Badge>
+
+            {!!updateTablePositions && <DownloadButton />}
+            <ReloadButton />
+          </Group>
+        </Panel>
+      </ReactFlow>
+    </div>
+  )
 }
-    
+
 export default ERTableComp

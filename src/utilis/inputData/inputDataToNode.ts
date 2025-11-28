@@ -25,7 +25,8 @@ export function inputDataToNodeAndEdges(tablesArr: Table[]){
                     "sourceHandle": sourceHandle,
                     "target": name,
                     "targetHandle": targetHandle,
-                })
+                    "type": "custom",
+                } as Edge)
             }
         }
 

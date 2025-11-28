@@ -10,10 +10,11 @@ import ReactFlow, {
   Node,
   Edge,
   MiniMap,
+  ReactFlowInstance,
 } from 'reactflow';
 import DataTableNode from './node/DataTableNode';
 import CustomEdge from './edges/CustomEdge';
-import { Badge, Group, Select, Slider, Stack, Text, Collapse, Switch, Tooltip } from '@mantine/core';
+import { Badge, Group, Select, Slider, Stack, Text, Collapse, Switch, Tooltip, ColorInput, rgba } from '@mantine/core';
 import { IconEye, IconEyeOff } from '@tabler/icons-react';
 
 import { inputDataToNodeAndEdges, LayoutType } from '../utilis/inputData/inputDataToNode';
@@ -51,6 +52,10 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
   const resetUISettings = useUISettingsStore((s: any) => s.resetUISettings);
   const showDataTypes = useUISettingsStore((s: any) => s.showDataTypes ?? true);
   const setShowDataTypes = useUISettingsStore((s: any) => s.setShowDataTypes);
+  const tableBackgroundColor = useUISettingsStore((s: any) => s.tableBackgroundColor ?? '#ffffff');
+  const setTableBackgroundColor = useUISettingsStore((s: any) => s.setTableBackgroundColor);
+  // React Flow instance for actions like fitView
+  const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
 
   // Layout configuration state
   const [circularRadius, setCircularRadius] = useState(800);
@@ -142,10 +147,25 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
 
     const testData = inputDataToNodeAndEdges(tableArray, { type: layoutType, options: layoutOptions });
 
-    setNodes(testData.nodes);
+    // apply per-node React Flow style for background color so nodes pick up color via node.style
+    const styledNodes = testData.nodes.map(n => ({
+      ...n,
+      // keep the visual style for React Flow, and also add a data hint so the node component can read it
+      style: {
+        ...(n.style || {}),
+        background: tableBackgroundColor,
+        backgroundColor: tableBackgroundColor,
+      },
+      data: {
+        ...(n.data || {}),
+        __background: tableBackgroundColor,
+      }
+    }));
+
+    setNodes(styledNodes);
     setEdges(testData.edges);
 
-  }, [tableArray, update, layoutType, circularRadius, forceRepulsion, forceAttraction, forceIterations, forceCenterX, forceCenterY, forceDamping, forceMinDistance, forceRepulsionMultiplier, hierarchicalNodeSpacing, hierarchicalLevelSpacing, xyOffset, boxOffsetX, boxOffsetY, boxCompact]);
+  }, [tableArray, update, layoutType, circularRadius, forceRepulsion, forceAttraction, forceIterations, forceCenterX, forceCenterY, forceDamping, forceMinDistance, forceRepulsionMultiplier, hierarchicalNodeSpacing, hierarchicalLevelSpacing, xyOffset, boxOffsetX, boxOffsetY, boxCompact, tableBackgroundColor]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -193,6 +213,7 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
   return (
     <div style={{ height: '100%', width: "100%", marginTop: "5vh" }}>
       <ReactFlow
+        onInit={(instance) => setRfInstance(instance)}
         nodes={filteredNodes}
         edges={showEdges ? filteredEdges : []}
 
@@ -212,64 +233,81 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
         <Controls />
         <MiniMap pannable zoomable />
 
-        <Panel position="top-right">
-          <Stack gap="xs">
-            <Group mt={8}>
-              <Select
-                size="xs"
-                placeholder="Layout"
-                data={[
-                  { value: 'linear', label: 'Linear' },
-                  { value: 'circular', label: 'Circular' },
-                  { value: 'hierarchical', label: 'Hierarchical' },
-                  { value: 'x', label: 'X (line)' },
-                  { value: 'y', label: 'Y (line)' },
-                  { value: 'box', label: 'Box (grid)' },
-                  { value: 'force-directed', label: 'Force Directed' },
-                ]}
-                value={layoutType}
-                onChange={(value) => {
-                  setLayoutType(value as LayoutType);
-                  setHighlightedNodeId(null); // Reset highlight when changing layout
-                }}
-                style={{ width: 120 }}
-              />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Tooltip label="Dim non-neighbors (de-emphasize)">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Text size="xs">DIM</Text>
-                    <IconEye size={14} />
-                  </div>
-                </Tooltip>
-                <Switch size="xs" checked={highlightMode === 'hide'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setHighlightMode?.(e.currentTarget.checked ? 'hide' : 'dim')} />
-                <Tooltip label="Hide non-neighbors (remove from view)">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <IconEyeOff size={14} />
-                    <Text size="xs">Hide</Text>
-                  </div>
-                </Tooltip>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Text size="xs">Edges</Text>
-                <Switch size="xs" checked={!!showEdges} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setShowEdges?.(e.currentTarget.checked)} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Text size="xs">Types</Text>
-                <Switch size="xs" checked={!!showDataTypes} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setShowDataTypes?.(e.currentTarget.checked)} />
-              </div>
-              <Button size="xs" variant="outline" onClick={() => resetUISettings?.()}>Reset UI</Button>
-              <Badge radius="sm" variant='light' color="green" tt="none">
-                Table count: {filteredNodes.length}{highlightedNodeId ? ` (filtered)` : ''}
+        <Panel position="top-right" style={{ width: 360, background: rgba('red', 0.2), padding: 6, borderRadius: 6 }}>
+          <Group mt={8}>
+            <Select
+              size="xs"
+              placeholder="Layout"
+              data={[
+                { value: 'linear', label: 'Linear' },
+                { value: 'circular', label: 'Circular' },
+                { value: 'hierarchical', label: 'Hierarchical' },
+                { value: 'x', label: 'X (left to right)' },
+                { value: 'y', label: 'Y (top to bottom)' },
+                { value: 'box', label: 'Box (grid)' },
+                { value: 'force-directed', label: 'Force Directed' },
+              ]}
+              value={layoutType}
+              onChange={(value) => {
+                setLayoutType(value as LayoutType);
+                setHighlightedNodeId(null); // Reset highlight when changing layout
+              }}
+              style={{ width: 120 }}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Tooltip label="Dim non-neighbors (de-emphasize)">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Text size="xs">DIM</Text>
+                  <IconEye size={14} />
+                </div>
+              </Tooltip>
+              <Switch size="xs" checked={highlightMode === 'hide'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setHighlightMode?.(e.currentTarget.checked ? 'hide' : 'dim')} />
+              <Tooltip label="Hide non-neighbors (remove from view)">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <IconEyeOff size={14} />
+                  <Text size="xs">Hide</Text>
+                </div>
+              </Tooltip>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Text size="xs">Edges</Text>
+              <Switch size="xs" checked={!!showEdges} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setShowEdges?.(e.currentTarget.checked)} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Text size="xs">Types</Text>
+              <Switch size="xs" checked={!!showDataTypes} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setShowDataTypes?.(e.currentTarget.checked)} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Text size="xs">Table BG</Text>
+              <Tooltip label="Pick table background color (persisted)">
+                <div>
+                  <ColorInput
+                    size="xs"
+                    value={tableBackgroundColor}
+                    onChange={(c) => setTableBackgroundColor?.(c || '#ffffff')}
+                    swatches={['#ffffff', '#f8f9fa', '#f1f3f5', '#e9ecef', '#ffe066', '#ffd43b', '#ffa94d', '#ff6b6b', '#e64980', '#845ef7']}
+                    style={{ width: 120 }}
+                  />
+                </div>
+              </Tooltip>
+            </div>
+            <Button size="xs" variant="outline" onClick={() => { resetUISettings?.(); rfInstance?.fitView(); }}>Reset UI</Button>
+            <Badge radius="sm" variant='light' color="green" tt="none">
+              Table count: {filteredNodes.length}{highlightedNodeId ? ` (filtered)` : ''}
+            </Badge>
+            {highlightedNodeId && (
+              <Badge radius="sm" variant='filled' color="blue" tt="none">
+                Highlighted: {highlightedNodeId}
               </Badge>
-              {highlightedNodeId && (
-                <Badge radius="sm" variant='filled' color="blue" tt="none">
-                  Highlighted: {highlightedNodeId}
-                </Badge>
-              )}
+            )}
 
-              {!!updateTablePositions && <DownloadButton />}
-              <ReloadButton />
-            </Group>
+            {!!updateTablePositions && <DownloadButton />}
+            <ReloadButton />
+          </Group>
+        </Panel>
+
+        <Panel position="top-left">
+          <Stack gap="xs">
 
             <Collapse in={layoutType === 'circular'}>
               <Group gap="xs" align="center">

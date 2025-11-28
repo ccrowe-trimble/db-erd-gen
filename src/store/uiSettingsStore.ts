@@ -10,6 +10,8 @@ interface UISettingsState {
   setBoxCompact: (v: boolean) => void
   showDataTypes: boolean
   setShowDataTypes: (v: boolean) => void
+  tableBackgroundColor: string
+  setTableBackgroundColor: (c: string) => void
 }
 
 const useUISettingsStore = create<UISettingsState>()(
@@ -23,8 +25,10 @@ const useUISettingsStore = create<UISettingsState>()(
       setBoxCompact: (v: boolean) => set({ boxCompact: v }),
   showDataTypes: true,
   setShowDataTypes: (v: boolean) => set({ showDataTypes: v }),
+      tableBackgroundColor: '#ffffff',
+      setTableBackgroundColor: (c: string) => set({ tableBackgroundColor: c }),
       // reset to defaults
-  resetUISettings: () => set({ showEdges: true, highlightMode: 'dim', boxCompact: false, showDataTypes: true })
+  resetUISettings: () => set({ showEdges: true, highlightMode: 'dim', boxCompact: false, showDataTypes: true, tableBackgroundColor: '#ffffff' })
     }), { name: 'ui-settings-storage' })
   )
 )

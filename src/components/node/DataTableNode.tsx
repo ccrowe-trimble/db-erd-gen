@@ -1,54 +1,73 @@
-import { Handle, Position } from 'reactflow';
+import { Handle, Position, NodeProps } from 'reactflow';
 import { Card, Text, Space, Badge, Grid, Box, Tooltip } from '@mantine/core';
 import { Table } from '../../interface/inputData';
 import TableForm from '../leftBar/components/TableForm';
 import useTableStore from '../../store/zustandStore';
 import useUISettingsStore from '../../store/uiSettingsStore';
+import AnotherTableForm from '../leftBar/components/AnotherTableForm';
 
-type DataTableNodeProps = {
-  data: Table
-}
+type DataTableNodeProps = NodeProps<Table>;
 
 function DataTableNode({ data }: DataTableNodeProps) {
 
   const tableArray = useTableStore((state) => state.tableArray);
   const showDataTypes = useUISettingsStore((s: any) => s.showDataTypes ?? true);
+  const tableBackgroundColor = useUISettingsStore((s: any) => s.tableBackgroundColor ?? '#ffffff');
+
+  // prefer per-node data.__background (set when nodes are created), otherwise fallback to global UI color
+  const bg = (data as any).__background || tableBackgroundColor;
 
   return (
     <Card
       shadow="sm"
       radius="md"
-      style={{ height: `${47 + data.columns.length * 28}px`, padding: "10px", fontSize: "2px", width: "320px" }}
+      style={{ background: bg, height: `${47 + data.columns.length * 28}px`, padding: "10px", fontSize: "2px", width: "320px" }}
     >
       <div>
 
-        <Card.Section>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-            <Text fz={15} ta="center" mt={12} style={{ pointerEvents: 'none' }}>
-              <Badge
-                size="lg"
-                tt="none"
-                radius={"md"}
-                style={{ pointerEvents: 'none' }}
-                rightSection={
-                  <div style={{ pointerEvents: 'auto' }}>
-                    <TableForm
-                      mode={'edit'}
-                      editData={data}
-                      allTableData={tableArray}
+        <Card.Section style={{ padding: 8 }}>
+          <div style={{ position: 'relative', width: '100%', padding: '5px', boxSizing: 'border-box' }}>
+            <Badge
+              size="lg"
+              tt="none"
+              radius="md"
+              style={{
+                pointerEvents: 'none',
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                boxSizing: 'border-box'
+              }}
+              leftSection={<div>{data.name}
+                {data && !(data as any).isIsolated && (
+                  <Badge size="xs" color="gray" variant="light" style={{ pointerEvents: 'none' }}>isolated</Badge>
+                )}
+              </div>}
+              rightSection={
+                <div style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'row' }}>
+                  <TableForm
+                    mode={'edit'}
+                    editData={data}
+                    allTableData={tableArray}
 
-                      size={14}
-                      color={"white"}
-                    />
-                  </div>
-                }
-              >
-                {data.name}
-              </Badge>
-            </Text>
-            {data && (data as any).isIsolated && (
-              <Badge size="xs" color="gray" variant="light" style={{ position: 'absolute', right: 8, top: 6 }}>isolated</Badge>
-            )}
+                    size={14}
+                    color={"white"}
+                  />
+
+                  <AnotherTableForm
+                    mode={'edit'}
+                    editData={data}
+                    allTableData={tableArray}
+
+                    size={14}
+                    color={"white"}
+                  />
+                </div>
+              }
+            />
+
+
           </div>
         </Card.Section>
 

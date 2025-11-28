@@ -76,7 +76,7 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
   const [boxOffsetX, setBoxOffsetX] = useState(200);
   const [boxOffsetY, setBoxOffsetY] = useState(150);
   // persisted compact mode for box layout
-  const boxCompact = useUISettingsStore((s: any) => s.boxCompact ?? false);
+  const boxCompact = useUISettingsStore((s: any) => s.boxCompact ?? true);
   const setBoxCompact = useUISettingsStore((s: any) => s.setBoxCompact);
   const [forceRepulsion, setForceRepulsion] = useState(1000);
   const [forceAttraction, setForceAttraction] = useState(0.1);

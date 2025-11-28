@@ -10,11 +10,31 @@ const CustomEdge: React.FC<EdgeProps> = ({
   style = {},
   markerEnd,
   selected,
+  sourcePosition,
+  targetPosition,
 }) => {
+  // Offset the targetX for the main edge path so it ends at the correct edge of the red line
+  const RED_LINE_HALF = 10;
+  // Calculate direction for horizontal offset
+  let adjustedSourceX = sourceX;
+  let adjustedTargetX = targetX;
+  let targetLineStartX = targetX - RED_LINE_HALF;
+  let targetLineEndX = targetX + RED_LINE_HALF;
+  let sourceLineStartX = sourceX - RED_LINE_HALF;
+  let sourceLineEndX = sourceX + RED_LINE_HALF;
+  if (targetX > sourceX) {
+    // Edge is going right, so offset to the right for the source and left for the target
+    adjustedSourceX = sourceX + RED_LINE_HALF;
+    adjustedTargetX = targetX - RED_LINE_HALF;
+  } else if (targetX < sourceX) {
+    // Edge is going left, so offset to the left for the source and right for the target
+    adjustedSourceX = sourceX - RED_LINE_HALF;
+    adjustedTargetX = targetX + RED_LINE_HALF;
+  }
   const [edgePath] = getStraightPath({
-    sourceX,
+    sourceX: adjustedSourceX,
     sourceY,
-    targetX,
+    targetX: adjustedTargetX,
     targetY,
   });
 
@@ -54,12 +74,32 @@ const CustomEdge: React.FC<EdgeProps> = ({
           `}
         </style>
       </defs>
+      {/* Main edge line */}
       <path
         id={id}
         style={edgeStyle}
         className="react-flow__edge-path"
         d={edgePath}
         markerEnd={markerEnd}
+      />
+      {/* Add a short horizontal line at the target node */}
+      {/* Add a short horizontal line at the source node */}
+      <line
+        x1={sourceLineStartX}
+        y1={sourceY}
+        x2={sourceLineEndX}
+        y2={sourceY}
+        stroke="red"
+        strokeWidth={6}
+      />
+      {/* Add a short horizontal line at the target node */}
+      <line
+        x1={targetLineStartX}
+        y1={targetY}
+        x2={targetLineEndX}
+        y2={targetY}
+        stroke="red"
+        strokeWidth={6}
       />
     </>
   );

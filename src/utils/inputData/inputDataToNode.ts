@@ -77,9 +77,54 @@ export function inputDataToNodeAndEdges(
     
     if (layoutConfig.type !== 'linear') {
       switch (layoutConfig.type) {
-        case 'circular':
-          positionedNodes = calculateCircularLayout(initNodes, layoutConfig.options);
+        case 'circular': {
+          // Separate linked and isolated nodes
+          // Only include nodes that are present in at least one edge as source or target
+          const edgeNodeIds = new Set<string>();
+          initialEdges.forEach(e => {
+            edgeNodeIds.add(e.source);
+            edgeNodeIds.add(e.target);
+          });
+          // A node is isolated only if it has NO incoming AND NO outgoing edges
+          const linkedNodes = initNodes.filter(n => edgeNodeIds.has(n.id));
+          const isolatedNodes = initNodes.filter(n =>
+            !initialEdges.some(e => e.source === n.id || e.target === n.id)
+          );
+
+          // Circular layout for linked nodes
+          // Defensive: filter out any nodes that are not actually linked by an edge
+          // Mark isolated nodes for debug/inspection
+          const circularNodes = calculateCircularLayout(linkedNodes, layoutConfig.options);
+          let markedGridNodes: Node[] = [];
+
+          // Grid layout for isolated nodes (reuse box layout, above centerY)
+          let gridNodes: Node[] = [];
+          if (isolatedNodes.length > 0) {
+            const gridOptions = {
+              ...(layoutConfig.options || {}),
+              centerY: (layoutConfig.options?.centerY ?? 300) - (layoutConfig.options?.radius ?? 300) - 220,
+              offsetY: 10,
+              offsetX: 220,
+              compact: false
+            };
+            gridNodes = calculateBoxLayout(isolatedNodes, gridOptions);
+            // Mark isolated nodes for debug/inspection
+            markedGridNodes = gridNodes.map(n => ({
+              ...n,
+              data: {
+                ...n.data,
+                ISOLATED: true
+              },
+              position: {
+                ...n.position,
+                y: Math.min(n.position.y, (layoutConfig.options?.centerY ?? 300) - (layoutConfig.options?.radius ?? 300) - 80)
+              }
+            }));
+          }
+
+          positionedNodes = [...circularNodes, ...gridNodes];
           break;
+        }
           case 'x':
               console.log('initNodes', initNodes);
                 positionedNodes = calculateXLayout(initNodes, { offset: layoutConfig.options?.offset, centerX: layoutConfig.options?.centerX, y: layoutConfig.options?.centerY ?? 0 });

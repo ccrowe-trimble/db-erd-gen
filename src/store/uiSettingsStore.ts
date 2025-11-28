@@ -21,14 +21,14 @@ const useUISettingsStore = create<UISettingsState>()(
       setShowEdges: (v: boolean) => set({ showEdges: v }),
       highlightMode: 'dim',
       setHighlightMode: (v: 'dim' | 'hide') => set({ highlightMode: v }),
-      boxCompact: false,
+      boxCompact: true,
       setBoxCompact: (v: boolean) => set({ boxCompact: v }),
   showDataTypes: true,
   setShowDataTypes: (v: boolean) => set({ showDataTypes: v }),
       tableBackgroundColor: '#ffffff',
       setTableBackgroundColor: (c: string) => set({ tableBackgroundColor: c }),
       // reset to defaults
-  resetUISettings: () => set({ showEdges: true, highlightMode: 'dim', boxCompact: false, showDataTypes: true, tableBackgroundColor: '#ffffff' })
+  resetUISettings: () => set({ showEdges: true, highlightMode: 'dim', boxCompact: true, showDataTypes: true, tableBackgroundColor: '#ffffff' })
     }), { name: 'ui-settings-storage' })
   )
 )

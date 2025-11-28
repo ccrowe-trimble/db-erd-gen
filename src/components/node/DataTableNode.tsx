@@ -58,7 +58,7 @@ const DataTableNode = forwardRef<HTMLDivElement, DataTableNodeProps>(function Da
               rightSection={
                 <div style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'row' }}>
                   <BtnGhost
-                    mode={'view_linked'}
+                    mode={'view_all'}
                     editData={data}
                     allTableData={tableArray}
 

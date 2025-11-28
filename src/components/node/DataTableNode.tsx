@@ -3,6 +3,7 @@ import { Card, Text, Space, Badge, Grid, Box, Tooltip } from '@mantine/core';
 import { Table } from '../../interface/inputData';
 import TableForm from '../leftBar/components/TableForm';
 import useTableStore from '../../store/zustandStore';
+import useUISettingsStore from '../../store/uiSettingsStore';
 
 type DataTableNodeProps = {
   data: Table
@@ -11,6 +12,7 @@ type DataTableNodeProps = {
 function DataTableNode({ data }: DataTableNodeProps) {
 
   const tableArray = useTableStore((state) => state.tableArray);
+  const showDataTypes = useUISettingsStore((s: any) => s.showDataTypes ?? true);
 
   return (
     <Card
@@ -21,28 +23,33 @@ function DataTableNode({ data }: DataTableNodeProps) {
       <div>
 
         <Card.Section>
-          <Text fz={15} ta="center" mt={12} style={{ pointerEvents: 'none' }}>
-            <Badge
-              size="lg"
-              tt="none"
-              radius={"md"}
-              style={{ pointerEvents: 'none' }}
-              rightSection={
-                <div style={{ pointerEvents: 'auto' }}>
-                  <TableForm
-                    mode={'edit'}
-                    editData={data}
-                    allTableData={tableArray}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+            <Text fz={15} ta="center" mt={12} style={{ pointerEvents: 'none' }}>
+              <Badge
+                size="lg"
+                tt="none"
+                radius={"md"}
+                style={{ pointerEvents: 'none' }}
+                rightSection={
+                  <div style={{ pointerEvents: 'auto' }}>
+                    <TableForm
+                      mode={'edit'}
+                      editData={data}
+                      allTableData={tableArray}
 
-                    size={14}
-                    color={"white"}
-                  />
-                </div>
-              }
-            >
-              {data.name}
-            </Badge>
-          </Text>
+                      size={14}
+                      color={"white"}
+                    />
+                  </div>
+                }
+              >
+                {data.name}
+              </Badge>
+            </Text>
+            {data && (data as any).isIsolated && (
+              <Badge size="xs" color="gray" variant="light" style={{ position: 'absolute', right: 8, top: 6 }}>isolated</Badge>
+            )}
+          </div>
         </Card.Section>
 
         <Space h="xs" />
@@ -70,7 +77,7 @@ function DataTableNode({ data }: DataTableNodeProps) {
                   </Text>
                 </Grid.Col>
 
-                <Grid.Col span={6}>
+                <Grid.Col span={showDataTypes ? 6 : 10}>
                   <Tooltip label={v.name}>
                     <Text fz={12}>
                       {v.name && v.name.length >= 20 ? v.name.slice(0, 20) + "..." : v.name}
@@ -78,13 +85,15 @@ function DataTableNode({ data }: DataTableNodeProps) {
                   </Tooltip>
                 </Grid.Col>
 
-                <Grid.Col span={4}>
-                  <Tooltip label={v.dataType}>
-                    <Text fz={12}>
-                      {v.dataType}
-                    </Text>
-                  </Tooltip>
-                </Grid.Col>
+                {showDataTypes && (
+                  <Grid.Col span={4}>
+                    <Tooltip label={v.dataType}>
+                      <Text fz={12}>
+                        {v.dataType}
+                      </Text>
+                    </Tooltip>
+                  </Grid.Col>
+                )}
               </Grid>
 
               <Handle

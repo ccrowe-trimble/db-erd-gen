@@ -125,6 +125,7 @@ const useTableStore = create<DataState>()(
                     }
                 })
             },
+            // (UI settings moved to a separate persisted store)
             importTableObj: (newTableArr: Table[]) => {
                 set((state) => {
                     return {

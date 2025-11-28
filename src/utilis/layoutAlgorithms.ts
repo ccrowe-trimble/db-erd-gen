@@ -492,9 +492,31 @@ export function calculateBoxLayout(
     return positioned;
   }
 
-  // Compact packing (right-first): fill rows left-to-right using actual node widths
-  // This mode places nodes row-major (right-first) so each row is filled horizontally before moving to the next row.
-  // per-column accumulated Y so Y offset uses the actual height of the node above in the same column
+  // Compact packing (row-major): fill rows left-to-right using actual node widths
+  // Strategy:
+  // 1) Compute per-column total heights (sum of node heights + offsetY gaps) so we can vertically center using the tallest column.
+  // 2) During placement, use a per-column accumulated Y to stack nodes in the same column, ensuring each node's Y accounts for the full height above it.
+
+  const colCounts = new Array(cols).fill(0);
+  const colHeights = new Array(cols).fill(0);
+
+  // Count nodes per column and sum heights
+  for (let i = 0; i < nodes.length; i++) {
+    const col = i % cols;
+    colCounts[col] += 1;
+    colHeights[col] += nodeHeights[i] || 0;
+  }
+
+  const colTotals = colHeights.map((h, ci) => {
+    const count = colCounts[ci];
+    return count > 0 ? h + offsetY * Math.max(0, count - 1) : 0;
+  });
+
+  const maxColHeight = Math.max(...colTotals, 0);
+  // center vertically based on column totals (compact stacking uses column heights)
+  const compactStartY = centerY - maxColHeight / 2;
+
+  // per-column running Y accumulator (initially zero)
   const colAccumulatedY = new Array(cols).fill(0);
 
   for (let r = 0; r < rows; r++) {
@@ -509,12 +531,15 @@ export function calculateBoxLayout(
 
     // place nodes left-to-right with their widths and per-column Y offsets
     let xCursor = rowStartX;
-    indices.forEach((nodeIdx, colIdx) => {
+    indices.forEach((nodeIdx, idxInRow) => {
       const node = nodes[nodeIdx];
       const w = nodeWidths[nodeIdx] || 0;
 
+      // column index across the grid (consistent across rows)
+      const col = nodeIdx % cols;
+
       // compute y based on the accumulated height for this column
-      const y = startY + colAccumulatedY[colIdx];
+      const y = compactStartY + colAccumulatedY[col];
 
       positioned[nodeIdx] = {
         ...node,
@@ -525,7 +550,7 @@ export function calculateBoxLayout(
       xCursor += w + offsetX;
 
       // update this column's accumulated Y by this node's height + offsetY
-      colAccumulatedY[colIdx] += (nodeHeights[nodeIdx] || 0) + offsetY;
+      colAccumulatedY[col] += (nodeHeights[nodeIdx] || 0) + offsetY;
     });
   }
 

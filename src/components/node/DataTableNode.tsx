@@ -73,62 +73,70 @@ function DataTableNode({ data }: DataTableNodeProps) {
 
         <Space h="xs" />
 
-        {data.columns.map((v, ind) => {
+        {/* prevent drag start when interacting with the rows — only the header (Badge) will start node drag */}
+        <div onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
 
-          const nodeDistance = 54 + ind * 24;
+          {data.columns.map((v, ind) => {
 
-          const leftNodeName = `${data.name}_${v.name}_left`
-          const rightNodeName = `${data.name}_${v.name}_right`
+            // Align row handle Y with the node height calculation used on the Card
+            // Card height is calculated as: 47 + data.columns.length * 28
+            // so place handles at: base 47px + index * 28px
+            const nodeDistance = 47 + ind * 28;
 
-          return (
-            <Box key={`${data.name}_${v.name}_rows`}>
+            const leftNodeName = `${data.name}_${v.name}_left`
+            const rightNodeName = `${data.name}_${v.name}_right`
 
-              <Grid >
-                <Grid.Col span={2}>
-                  <Text fz={8}>
-                    {
-                      v.isPrimaryKey
-                        ? "PK"
-                        : !!v.foreignTo
-                          ? "FK"
-                          : ""
-                    }
-                  </Text>
-                </Grid.Col>
+            return (
+              <Box key={`${data.name}_${v.name}_rows`}>
 
-                <Grid.Col span={showDataTypes ? 6 : 10}>
-                  <Tooltip label={v.name}>
-                    <Text fz={12}>
-                      {v.name && v.name.length >= 20 ? v.name.slice(0, 20) + "..." : v.name}
+                <Grid >
+                  <Grid.Col span={2}>
+                    <Text fz={8}>
+                      {
+                        v.isPrimaryKey
+                          ? "PK"
+                          : !!v.foreignTo
+                            ? "FK"
+                            : ""
+                      }
                     </Text>
-                  </Tooltip>
-                </Grid.Col>
+                  </Grid.Col>
 
-                {showDataTypes && (
-                  <Grid.Col span={4}>
-                    <Tooltip label={v.dataType}>
+                  <Grid.Col span={showDataTypes ? 6 : 10}>
+                    <Tooltip label={v.name}>
                       <Text fz={12}>
-                        {v.dataType}
+                        {v.name && v.name.length >= 20 ? v.name.slice(0, 20) + "..." : v.name}
                       </Text>
                     </Tooltip>
                   </Grid.Col>
-                )}
-              </Grid>
 
-              <Handle
-                type={!!v.foreignTo ? "target" : "source"}
-                position={Position.Left} id={leftNodeName}
-                style={{ top: nodeDistance, width: "0px", minWidth: "0px" }}
-              />
-              <Handle
-                type={!!v.foreignTo ? "target" : "source"}
-                position={Position.Right} id={rightNodeName}
-                style={{ top: nodeDistance, width: "0px", minWidth: "0px" }}
-              />
-            </Box>
-          )
-        }
-        )}
+                  {showDataTypes && (
+                    <Grid.Col span={4}>
+                      <Tooltip label={v.dataType}>
+                        <Text fz={12}>
+                          {v.dataType}
+                        </Text>
+                      </Tooltip>
+                    </Grid.Col>
+                  )}
+                </Grid>
+
+                <Handle
+                  type={!!v.foreignTo ? "target" : "source"}
+                  position={Position.Left} id={leftNodeName}
+                  style={{ top: nodeDistance, width: "0px", minWidth: "0px" }}
+                />
+                <Handle
+                  type={!!v.foreignTo ? "target" : "source"}
+                  position={Position.Right} id={rightNodeName}
+                  style={{ top: nodeDistance, width: "0px", minWidth: "0px" }}
+                />
+              </Box>
+            )
+          }
+          )}
+
+        </div>
 
       </div>
     </Card>

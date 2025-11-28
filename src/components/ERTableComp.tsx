@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Controls,
   Background,
@@ -14,8 +14,8 @@ import ReactFlow, {
 } from 'reactflow';
 import DataTableNode from './node/DataTableNode';
 import CustomEdge from './edges/CustomEdge';
-import { Badge, Group, Select, Slider, Stack, Text, Collapse, Switch, Tooltip, ColorInput, rgba } from '@mantine/core';
-import { IconEye, IconEyeOff } from '@tabler/icons-react';
+import { Badge, Group, Select, Slider, Stack, Text, Collapse, Switch, Tooltip, ColorInput, rgba, ActionIcon } from '@mantine/core';
+import { IconEye, IconEyeOff, IconX } from '@tabler/icons-react';
 
 import { inputDataToNodeAndEdges, LayoutType } from '../utilis/inputData/inputDataToNode';
 import { Table, TablePosition } from '../interface/inputData';
@@ -41,6 +41,7 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
 
   const [nodes, setNodes] = useState<Node<any>[]>([]);
   const [edges, setEdges] = useState<Edge<any>[]>([]);
+  const nodesRef = useRef<Node<any>[]>(nodes);
   const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
   const [layoutType, setLayoutType] = useState<LayoutType>('linear');
   // highlightMode persisted via ui settings store
@@ -56,6 +57,17 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
   const setTableBackgroundColor = useUISettingsStore((s: any) => s.setTableBackgroundColor);
   // React Flow instance for actions like fitView
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
+  const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
+
+  // helper to update nodes state and keep ref in sync
+  const updateNodes = useCallback((updater: Node<any>[] | ((prev: Node<any>[]) => Node<any>[])) => {
+    setNodes((prev) => {
+      const next = typeof updater === 'function' ? (updater as (prev: Node<any>[]) => Node<any>[])(prev) : updater;
+      nodesRef.current = next as Node<any>[];
+      return next as Node<any>[];
+    });
+  }, []);
+  const [shouldFitOnUpdate, setShouldFitOnUpdate] = useState(false);
 
   // Layout configuration state
   const [circularRadius, setCircularRadius] = useState(800);
@@ -76,6 +88,8 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
   const [forceRepulsionMultiplier, setForceRepulsionMultiplier] = useState(1.0);
   const [hierarchicalNodeSpacing, setHierarchicalNodeSpacing] = useState(200);
   const [hierarchicalLevelSpacing, setHierarchicalLevelSpacing] = useState(150);
+  // When true, Reformat will only recompute layout for nodes currently visible in the viewport
+  const [viewportOnlyReformat, setViewportOnlyReformat] = useState(false);
 
   // Filter nodes and edges based on highlighted node
   const filteredNodes = useMemo(() => {
@@ -101,10 +115,10 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
       ...node,
       style: {
         ...(node.style || {}),
-        opacity: connectedNodeIds.has(node.id) ? 1 : 0.12
-      }
+        opacity: connectedNodeIds.has(node.id) ? 1 : 0.12,
+      },
     }));
-  }, [nodes, edges, highlightedNodeId]);
+  }, [nodes, edges, highlightedNodeId, highlightMode]);
 
   const filteredEdges = useMemo(() => {
     if (!highlightedNodeId) return edges;
@@ -120,12 +134,17 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
       ...edge,
       style: {
         ...(edge.style || {}),
-        opacity: edge.source === highlightedNodeId || edge.target === highlightedNodeId ? 1 : 0.08
-      }
+        opacity: edge.source === highlightedNodeId || edge.target === highlightedNodeId ? 1 : 0.08,
+      },
     }));
-  }, [edges, highlightedNodeId]);
+  }, [edges, highlightedNodeId, highlightMode]);
 
   useEffect(() => {
+    // no-op: placeholder to satisfy linting if function is hoisted below
+  }, []);
+
+  // compute and apply layout — extracted so we can call it on demand (Reformat button) or from effects
+  const computeAndApplyLayout = useCallback((viewportOnly: boolean = false) => {
     const layoutOptions = {
       radius: circularRadius,
       repulsionForce: forceRepulsion,
@@ -144,13 +163,78 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
       offsetY: boxOffsetY,
       compact: boxCompact,
     };
+    // If viewportOnly is requested, try to compute which nodes are visible in the
+    // current React Flow viewport and only run layout for those. We rely on
+    // rfInstance.project to translate screen coords to flow coordinates. If the
+    // instance or projection fails, fallback to full layout.
+    if (viewportOnly && rfInstanceRef.current) {
+      try {
+        // top-left and bottom-right of the viewport in screen coords
+        const topLeft = rfInstanceRef.current!.project({ x: 0, y: 0 });
+        const bottomRight = rfInstanceRef.current!.project({ x: window.innerWidth, y: window.innerHeight });
 
+        const minX = Math.min(topLeft.x, bottomRight.x);
+        const maxX = Math.max(topLeft.x, bottomRight.x);
+        const minY = Math.min(topLeft.y, bottomRight.y);
+        const maxY = Math.max(topLeft.y, bottomRight.y);
+
+        // decide which current nodes fall into the viewport rectangle
+        const visibleNodeIds = new Set<string>();
+        nodesRef.current.forEach(n => {
+          if (!n.position) return;
+          const nx = n.position.x;
+          const ny = n.position.y;
+          // conservative test: check node origin is inside viewport
+          if (nx >= minX && nx <= maxX && ny >= minY && ny <= maxY) {
+            visibleNodeIds.add(n.id);
+          }
+        });
+
+        if (visibleNodeIds.size > 0) {
+          const subsetTables = tableArray.filter(t => visibleNodeIds.has(t.name));
+          if (subsetTables.length > 0) {
+            const testDataSubset = inputDataToNodeAndEdges(subsetTables, { type: layoutType, options: layoutOptions });
+
+            // apply background color only for nodes returned by the layout
+            const styledSubsetNodes = testDataSubset.nodes.map(n => ({
+              ...n,
+              style: {
+                ...(n.style || {}),
+                background: tableBackgroundColor,
+                backgroundColor: tableBackgroundColor,
+              },
+              data: {
+                ...(n.data || {}),
+                __background: tableBackgroundColor,
+              }
+            }));
+
+            // map returned positions back into the existing nodes state
+            const posMap = new Map<string, { x: number; y: number }>();
+            styledSubsetNodes.forEach(n => posMap.set(n.id, n.position));
+
+            updateNodes(prev => prev.map(n => (
+              visibleNodeIds.has(n.id) ? { ...n, position: posMap.get(n.id) || n.position, style: { ...(n.style || {}), background: tableBackgroundColor, backgroundColor: tableBackgroundColor }, data: { ...(n.data || {}), __background: tableBackgroundColor } } : n
+            )));
+
+            // Keep existing edges; updating only nodes' positions is sufficient here
+            setEdges((eds) => eds.map(e => ({ ...e })));
+            setShouldFitOnUpdate(true);
+            return;
+          }
+        }
+      } catch (err) {
+        // projection failed — fall back to full layout below
+        // noop
+      }
+    }
+
+    // full layout fallback
     const testData = inputDataToNodeAndEdges(tableArray, { type: layoutType, options: layoutOptions });
 
     // apply per-node React Flow style for background color so nodes pick up color via node.style
     const styledNodes = testData.nodes.map(n => ({
       ...n,
-      // keep the visual style for React Flow, and also add a data hint so the node component can read it
       style: {
         ...(n.style || {}),
         background: tableBackgroundColor,
@@ -162,15 +246,40 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
       }
     }));
 
-    setNodes(styledNodes);
+    updateNodes(styledNodes);
     setEdges(testData.edges);
+    // request fit after the DOM paints
+    setShouldFitOnUpdate(true);
+  }, [
+    tableArray,
+    layoutType,
+    circularRadius,
+    forceRepulsion,
+    forceRepulsionMultiplier,
+    forceAttraction,
+    forceIterations,
+    forceCenterX,
+    forceCenterY,
+    forceDamping,
+    forceMinDistance,
+    hierarchicalNodeSpacing,
+    hierarchicalLevelSpacing,
+    xyOffset,
+    boxOffsetX,
+    boxOffsetY,
+    boxCompact,
+    tableBackgroundColor,
+  ]);
 
-  }, [tableArray, update, layoutType, circularRadius, forceRepulsion, forceAttraction, forceIterations, forceCenterX, forceCenterY, forceDamping, forceMinDistance, forceRepulsionMultiplier, hierarchicalNodeSpacing, hierarchicalLevelSpacing, xyOffset, boxOffsetX, boxOffsetY, boxCompact, tableBackgroundColor]);
+  // run layout computation initially and whenever relevant inputs change
+  useEffect(() => {
+    computeAndApplyLayout();
+  }, [computeAndApplyLayout, update]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      setNodes((nds) => applyNodeChanges(changes, nds))
-    }, []
+      updateNodes((nds) => applyNodeChanges(changes, nds))
+    }, [updateNodes]
   );
 
   const onNodeDragStop = useCallback(
@@ -210,10 +319,91 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
   const nodeTypes = NODE_TYPES;
   const edgeTypes = EDGE_TYPES;
 
+  useEffect(() => {
+    if (!shouldFitOnUpdate) return;
+    if (!rfInstance) return;
+
+    let cancelled = false;
+    // run two rAFs to ensure the DOM/React Flow has painted the new nodes
+    let raf1: number | undefined;
+    let raf2: number | undefined;
+
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (cancelled) return;
+        try {
+          rfInstance.fitView({ padding: 0.12 });
+        } catch (e) {
+          // ignore errors from fitView when instance is unavailable
+        }
+        // clear the flag so we don't refit repeatedly
+        setShouldFitOnUpdate(false);
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      // cancel both rafs if still pending
+      if (raf1 !== undefined) cancelAnimationFrame(raf1);
+      if (raf2 !== undefined) cancelAnimationFrame(raf2);
+    };
+  }, [shouldFitOnUpdate, filteredNodes, rfInstance]);
+
+  // When a filter (highlightedNodeId) is applied, recompute layout for the
+  // visible subset (neighbors + highlighted node) so their positions are
+  // recalculated and the viewport can refit to the new arrangement.
+  useEffect(() => {
+    if (!highlightedNodeId) return;
+
+    // collect connected node ids
+    const connectedNodeIds = new Set<string>();
+    connectedNodeIds.add(highlightedNodeId);
+    edges.forEach(edge => {
+      if (edge.source === highlightedNodeId) connectedNodeIds.add(edge.target);
+      else if (edge.target === highlightedNodeId) connectedNodeIds.add(edge.source);
+    });
+
+    // build a filtered table array matching the connected nodes so the
+    // layout utility computes positions for only those nodes
+    const subsetTables = tableArray.filter(t => connectedNodeIds.has(t.name));
+    if (subsetTables.length === 0) return;
+
+    const layoutOptions = {
+      radius: circularRadius,
+      repulsionForce: forceRepulsion,
+      repulsionMultiplier: forceRepulsionMultiplier,
+      attractionForce: forceAttraction,
+      iterations: forceIterations,
+      centerX: forceCenterX,
+      centerY: forceCenterY,
+      damping: forceDamping,
+      minDistance: forceMinDistance,
+      nodeSpacing: hierarchicalNodeSpacing,
+      levelSpacing: hierarchicalLevelSpacing,
+      offset: xyOffset,
+      offsetX: boxOffsetX,
+      offsetY: boxOffsetY,
+      compact: boxCompact,
+    };
+
+    const testData = inputDataToNodeAndEdges(subsetTables, { type: layoutType, options: layoutOptions });
+
+    // map returned positions back into the existing nodes state
+    const posMap = new Map<string, { x: number; y: number }>();
+    testData.nodes.forEach(n => posMap.set(n.id, n.position));
+
+    updateNodes(prev => prev.map(n => (
+      connectedNodeIds.has(n.id) ? { ...n, position: posMap.get(n.id) || n.position } : n
+    )));
+
+    // request fit after repaint
+    setShouldFitOnUpdate(true);
+  }, [highlightedNodeId, tableArray, layoutType, circularRadius, forceRepulsion, forceRepulsionMultiplier, forceAttraction, forceIterations, forceCenterX, forceCenterY, forceDamping, forceMinDistance, hierarchicalNodeSpacing, hierarchicalLevelSpacing, xyOffset, boxOffsetX, boxOffsetY, boxCompact, edges]);
+
   return (
     <div style={{ height: '100%', width: "100%", marginTop: "5vh" }}>
       <ReactFlow
-        onInit={(instance) => setRfInstance(instance)}
+        onInit={(instance) => { setRfInstance(instance); rfInstanceRef.current = instance; }}
         nodes={filteredNodes}
         edges={showEdges ? filteredEdges : []}
 
@@ -233,13 +423,13 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
         <Controls />
         <MiniMap pannable zoomable />
 
-        <Panel position="top-right" style={{ width: 360, background: rgba('red', 0.2), padding: 6, borderRadius: 6 }}>
+        <Panel position="top-right" style={{ width: 500, background: rgba('red', 0.08), padding: 6, borderRadius: 6 }}>
           <Group mt={8}>
             <Select
               size="xs"
               placeholder="Layout"
               data={[
-                { value: 'linear', label: 'Linear' },
+                { value: 'linear', label: 'Manual' },
                 { value: 'circular', label: 'Circular' },
                 { value: 'hierarchical', label: 'Hierarchical' },
                 { value: 'x', label: 'X (left to right)' },
@@ -251,17 +441,19 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
               onChange={(value) => {
                 setLayoutType(value as LayoutType);
                 setHighlightedNodeId(null); // Reset highlight when changing layout
+                // request fitView after the layout change has been applied and nodes rendered
+                setShouldFitOnUpdate(true);
               }}
-              style={{ width: 120 }}
+              style={{ width: 140 }}
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Tooltip label="Dim non-neighbors (de-emphasize)">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Text size="xs">DIM</Text>
+                  <Text size="xs">Dim</Text>
                   <IconEye size={14} />
                 </div>
               </Tooltip>
-              <Switch size="xs" checked={highlightMode === 'hide'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setHighlightMode?.(e.currentTarget.checked ? 'hide' : 'dim')} />
+              <Switch size="xs" color="green" checked={highlightMode === 'hide'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setHighlightMode?.(e.currentTarget.checked ? 'hide' : 'dim')} />
               <Tooltip label="Hide non-neighbors (remove from view)">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <IconEyeOff size={14} />
@@ -292,9 +484,32 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
               </Tooltip>
             </div>
             <Button size="xs" variant="outline" onClick={() => { resetUISettings?.(); rfInstance?.fitView(); }}>Reset UI</Button>
-            <Badge radius="sm" variant='light' color="green" tt="none">
-              Table count: {filteredNodes.length}{highlightedNodeId ? ` (filtered)` : ''}
-            </Badge>
+            <Button size="xs" variant="default" onClick={() => computeAndApplyLayout(viewportOnlyReformat)}>Reformat</Button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Text size="xs">Viewport</Text>
+              <Tooltip label="Only recompute layout for nodes currently visible in the viewport">
+                <Switch size="xs" checked={viewportOnlyReformat} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setViewportOnlyReformat(e.currentTarget.checked)} />
+              </Tooltip>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Tooltip label={highlightedNodeId ? 'Click to clear filter' : ''}>
+                <Badge
+                  radius="sm"
+                  variant='light'
+                  color="green"
+                  tt="none"
+                  style={{ cursor: highlightedNodeId ? 'pointer' : 'default' }}
+                  onClick={() => { if (highlightedNodeId) setHighlightedNodeId(null); }}
+                >
+                  Table count: {filteredNodes.length}{highlightedNodeId ? ` (filtered)` : ''}
+                </Badge>
+              </Tooltip>
+              {highlightedNodeId && (
+                <ActionIcon size="xs" color="gray" variant="subtle" onClick={() => setHighlightedNodeId(null)}>
+                  <IconX size={14} />
+                </ActionIcon>
+              )}
+            </div>
             {highlightedNodeId && (
               <Badge radius="sm" variant='filled' color="blue" tt="none">
                 Highlighted: {highlightedNodeId}
@@ -304,204 +519,212 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
             {!!updateTablePositions && <DownloadButton />}
             <ReloadButton />
           </Group>
-        </Panel>
 
-        <Panel position="top-left">
-          <Stack gap="xs">
-
-            <Collapse in={layoutType === 'circular'}>
-              <Group gap="xs" align="center">
-                <Text size="xs" w={80}>Radius:</Text>
-                <Slider
-                  size="xs"
-                  min={100}
-                  max={4000}
-                  step={100}
-                  value={circularRadius}
-                  onChange={setCircularRadius}
-                  style={{ width: 100 }}
-                />
-                <Text size="xs" w={30}>{circularRadius}</Text>
-              </Group>
-            </Collapse>
-
-            <Collapse in={layoutType === 'x' || layoutType === 'y'}>
-              <Group gap="xs" align="center">
-                <Text size="xs" w={80}>Offset:</Text>
-                <Slider
-                  size="xs"
-                  min={50}
-                  max={800}
-                  step={10}
-                  value={xyOffset}
-                  onChange={setXyOffset}
-                  style={{ width: 100 }}
-                />
-                <Text size="xs" w={40}>{xyOffset}</Text>
-              </Group>
-            </Collapse>
-
-            <Collapse in={layoutType === 'box'}>
-              <Stack gap="xs">
+          {/* Show relevant layout controls depending on the selected layout mode */}
+          <Stack gap="xs" mt={8}>
+            {layoutType === 'circular' && (
+              <div>
                 <Group gap="xs" align="center">
-                  <Text size="xs" w={80}>Offset X:</Text>
-                  <Slider
-                    size="xs"
-                    min={0}
-                    max={800}
-                    step={50}
-                    value={boxOffsetX}
-                    onChange={setBoxOffsetX}
-                    style={{ width: 100 }}
-                  />
-                  <Text size="xs" w={40}>{boxOffsetX}</Text>
-                </Group>
-                <Group gap="xs" align="center">
-                  <Text size="xs" w={80}>Offset Y:</Text>
-                  <Slider
-                    size="xs"
-                    min={0}
-                    max={800}
-                    step={50}
-                    value={boxOffsetY}
-                    onChange={setBoxOffsetY}
-                    style={{ width: 100 }}
-                  />
-                  <Text size="xs" w={40}>{boxOffsetY}</Text>
-                </Group>
-                <Group gap="xs" align="center">
-                  <Text size="xs" w={80}>Compact:</Text>
-                  <Switch size="xs" checked={boxCompact} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBoxCompact(e.currentTarget.checked)} />
-                </Group>
-              </Stack>
-            </Collapse>
-
-            <Collapse in={layoutType === 'hierarchical'}>
-              <Stack gap="xs">
-                <Group gap="xs" align="center">
-                  <Text size="xs" w={80}>Node Spacing:</Text>
+                  <Text size="xs" w={80}>Radius:</Text>
                   <Slider
                     size="xs"
                     min={100}
-                    max={3000}
+                    max={4000}
                     step={100}
-                    value={hierarchicalNodeSpacing}
-                    onChange={setHierarchicalNodeSpacing}
-                    style={{ width: 100 }}
+                    value={circularRadius}
+                    onChange={setCircularRadius}
+                    style={{ width: 140 }}
                   />
-                  <Text size="xs" w={40}>{hierarchicalNodeSpacing}</Text>
+                  <Text size="xs" w={40}>{circularRadius}</Text>
                 </Group>
-                <Group gap="xs" align="center">
-                  <Text size="xs" w={80}>Level Spacing:</Text>
-                  <Slider
-                    size="xs"
-                    min={50}
-                    max={3000}
-                    step={50}
-                    value={hierarchicalLevelSpacing}
-                    onChange={setHierarchicalLevelSpacing}
-                    style={{ width: 100 }}
-                  />
-                  <Text size="xs" w={40}>{hierarchicalLevelSpacing}</Text>
-                </Group>
-              </Stack>
-            </Collapse>
+              </div>
+            )}
 
-            <Collapse in={layoutType === 'force-directed'}>
-              <Stack gap="xs">
+            {(layoutType === 'x' || layoutType === 'y') && (
+              <div>
                 <Group gap="xs" align="center">
-                  <Text size="xs" w={80}>Repulsion:</Text>
-                  <Slider
-                    size="xs"
-                    min={200}
-                    max={3000}
-                    step={100}
-                    value={forceRepulsion}
-                    onChange={setForceRepulsion}
-                    style={{ width: 100 }}
-                  />
-                  <Text size="xs" w={40}>{forceRepulsion}</Text>
-                </Group>
-                <Group gap="xs" align="center">
-                  <Text size="xs" w={80}>Attraction:</Text>
-                  <Slider
-                    size="xs"
-                    min={0.01}
-                    max={0.5}
-                    step={0.01}
-                    value={forceAttraction}
-                    onChange={setForceAttraction}
-                    style={{ width: 100 }}
-                  />
-                  <Text size="xs" w={40}>{forceAttraction.toFixed(2)}</Text>
-                </Group>
-                <Group gap="xs" align="center">
-                  <Text size="xs" w={80}>Iterations:</Text>
-                  <Slider
-                    size="xs"
-                    min={10}
-                    max={200}
-                    step={10}
-                    value={forceIterations}
-                    onChange={setForceIterations}
-                    style={{ width: 100 }}
-                  />
-                  <Text size="xs" w={30}>{forceIterations}</Text>
-                </Group>
-                <Group gap="xs" align="center">
-                  <Text size="xs" w={80}>Center X:</Text>
-                  <Slider
-                    size="xs"
-                    min={-1000}
-                    max={2000}
-                    step={50}
-                    value={forceCenterX}
-                    onChange={setForceCenterX}
-                    style={{ width: 100 }}
-                  />
-                  <Text size="xs" w={40}>{forceCenterX}</Text>
-                </Group>
-                <Group gap="xs" align="center">
-                  <Text size="xs" w={80}>Center Y:</Text>
-                  <Slider
-                    size="xs"
-                    min={-1000}
-                    max={2000}
-                    step={50}
-                    value={forceCenterY}
-                    onChange={setForceCenterY}
-                    style={{ width: 100 }}
-                  />
-                  <Text size="xs" w={40}>{forceCenterY}</Text>
-                </Group>
-                <Group gap="xs" align="center">
-                  <Text size="xs" w={80}>Min Distance:</Text>
+                  <Text size="xs" w={80}>Offset:</Text>
                   <Slider
                     size="xs"
                     min={50}
-                    max={500}
-                    step={25}
-                    value={forceMinDistance}
-                    onChange={setForceMinDistance}
-                    style={{ width: 100 }}
+                    max={800}
+                    step={10}
+                    value={xyOffset}
+                    onChange={setXyOffset}
+                    style={{ width: 140 }}
                   />
-                  <Text size="xs" w={40}>{forceMinDistance}</Text>
+                  <Text size="xs" w={40}>{xyOffset}</Text>
                 </Group>
-                <Group gap="xs" align="center">
-                  <Text size="xs" w={80}>Repulsion ×:</Text>
-                  <Slider
-                    size="xs"
-                    min={0.25}
-                    max={3}
-                    step={0.05}
-                    value={forceRepulsionMultiplier}
-                    onChange={setForceRepulsionMultiplier}
-                    style={{ width: 100 }}
-                  />
-                  <Text size="xs" w={40}>{forceRepulsionMultiplier.toFixed(2)}</Text>
-                </Group>
-              </Stack>
-            </Collapse>
+              </div>
+            )}
+
+            {layoutType === 'box' && (
+              <div>
+                <Stack gap="xs">
+                  <Group gap="xs" align="center">
+                    <Text size="xs" w={80}>Offset X:</Text>
+                    <Slider
+                      size="xs"
+                      min={0}
+                      max={800}
+                      step={50}
+                      value={boxOffsetX}
+                      onChange={setBoxOffsetX}
+                      style={{ width: 140 }}
+                    />
+                    <Text size="xs" w={40}>{boxOffsetX}</Text>
+                  </Group>
+                  <Group gap="xs" align="center">
+                    <Text size="xs" w={80}>Offset Y:</Text>
+                    <Slider
+                      size="xs"
+                      min={0}
+                      max={800}
+                      step={50}
+                      value={boxOffsetY}
+                      onChange={setBoxOffsetY}
+                      style={{ width: 140 }}
+                    />
+                    <Text size="xs" w={40}>{boxOffsetY}</Text>
+                  </Group>
+                  <Group gap="xs" align="center">
+                    <Text size="xs" w={80}>Compact:</Text>
+                    <Switch size="xs" checked={boxCompact} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBoxCompact(e.currentTarget.checked)} />
+                  </Group>
+                </Stack>
+              </div>
+            )}
+
+            {layoutType === 'hierarchical' && (
+              <div>
+                <Stack gap="xs">
+                  <Group gap="xs" align="center">
+                    <Text size="xs" w={80}>Node Spacing:</Text>
+                    <Slider
+                      size="xs"
+                      min={100}
+                      max={3000}
+                      step={100}
+                      value={hierarchicalNodeSpacing}
+                      onChange={setHierarchicalNodeSpacing}
+                      style={{ width: 140 }}
+                    />
+                    <Text size="xs" w={40}>{hierarchicalNodeSpacing}</Text>
+                  </Group>
+                  <Group gap="xs" align="center">
+                    <Text size="xs" w={80}>Level Spacing:</Text>
+                    <Slider
+                      size="xs"
+                      min={50}
+                      max={3000}
+                      step={50}
+                      value={hierarchicalLevelSpacing}
+                      onChange={setHierarchicalLevelSpacing}
+                      style={{ width: 140 }}
+                    />
+                    <Text size="xs" w={40}>{hierarchicalLevelSpacing}</Text>
+                  </Group>
+                </Stack>
+              </div>
+            )}
+
+            {layoutType === 'force-directed' && (
+              <div>
+                <Stack gap="xs">
+                  <Group gap="xs" align="center">
+                    <Text size="xs" w={80}>Repulsion:</Text>
+                    <Slider
+                      size="xs"
+                      min={200}
+                      max={3000}
+                      step={100}
+                      value={forceRepulsion}
+                      onChange={setForceRepulsion}
+                      style={{ width: 140 }}
+                    />
+                    <Text size="xs" w={40}>{forceRepulsion}</Text>
+                  </Group>
+                  <Group gap="xs" align="center">
+                    <Text size="xs" w={80}>Attraction:</Text>
+                    <Slider
+                      size="xs"
+                      min={0.01}
+                      max={0.5}
+                      step={0.01}
+                      value={forceAttraction}
+                      onChange={setForceAttraction}
+                      style={{ width: 140 }}
+                    />
+                    <Text size="xs" w={40}>{forceAttraction.toFixed(2)}</Text>
+                  </Group>
+                  <Group gap="xs" align="center">
+                    <Text size="xs" w={80}>Iterations:</Text>
+                    <Slider
+                      size="xs"
+                      min={10}
+                      max={200}
+                      step={10}
+                      value={forceIterations}
+                      onChange={setForceIterations}
+                      style={{ width: 140 }}
+                    />
+                    <Text size="xs" w={30}>{forceIterations}</Text>
+                  </Group>
+                  <Group gap="xs" align="center">
+                    <Text size="xs" w={80}>Center X:</Text>
+                    <Slider
+                      size="xs"
+                      min={-1000}
+                      max={2000}
+                      step={50}
+                      value={forceCenterX}
+                      onChange={setForceCenterX}
+                      style={{ width: 140 }}
+                    />
+                    <Text size="xs" w={40}>{forceCenterX}</Text>
+                  </Group>
+                  <Group gap="xs" align="center">
+                    <Text size="xs" w={80}>Center Y:</Text>
+                    <Slider
+                      size="xs"
+                      min={-1000}
+                      max={2000}
+                      step={50}
+                      value={forceCenterY}
+                      onChange={setForceCenterY}
+                      style={{ width: 140 }}
+                    />
+                    <Text size="xs" w={40}>{forceCenterY}</Text>
+                  </Group>
+                  <Group gap="xs" align="center">
+                    <Text size="xs" w={80}>Min Distance:</Text>
+                    <Slider
+                      size="xs"
+                      min={50}
+                      max={500}
+                      step={25}
+                      value={forceMinDistance}
+                      onChange={setForceMinDistance}
+                      style={{ width: 140 }}
+                    />
+                    <Text size="xs" w={40}>{forceMinDistance}</Text>
+                  </Group>
+                  <Group gap="xs" align="center">
+                    <Text size="xs" w={80}>Repulsion ×:</Text>
+                    <Slider
+                      size="xs"
+                      min={0.25}
+                      max={3}
+                      step={0.05}
+                      value={forceRepulsionMultiplier}
+                      onChange={setForceRepulsionMultiplier}
+                      style={{ width: 140 }}
+                    />
+                    <Text size="xs" w={40}>{forceRepulsionMultiplier.toFixed(2)}</Text>
+                  </Group>
+                </Stack>
+              </div>
+            )}
           </Stack>
         </Panel>
       </ReactFlow>

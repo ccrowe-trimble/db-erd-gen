@@ -110,14 +110,20 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
       return nodes.filter(node => connectedNodeIds.has(node.id));
     }
 
+
+
     // dim mode: return all nodes but with reduced opacity for non-neighbors
-    return nodes.map(node => ({
+    var changedNodes = nodes.map(node => ({
       ...node,
       style: {
         ...(node.style || {}),
         opacity: connectedNodeIds.has(node.id) ? 1 : 0.12,
       },
     }));
+
+
+
+    return changedNodes;
   }, [nodes, edges, highlightedNodeId, highlightMode]);
 
   const filteredEdges = useMemo(() => {
@@ -246,9 +252,20 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
       }
     }));
 
-    updateNodes(styledNodes);
+    // Merge new positions/styles into existing nodes to preserve filtered/dimmed state
+    updateNodes(prevNodes =>
+      prevNodes.map(node => {
+        const updated = styledNodes.find(n => n.id === node.id);
+        if (!updated) return node;
+        return {
+          ...node,
+          position: updated.position,
+          style: { ...(node.style || {}), ...(updated.style || {}) },
+          data: { ...(node.data || {}), ...(updated.data || {}) },
+        };
+      })
+    );
     setEdges(testData.edges);
-    // request fit after the DOM paints
     setShouldFitOnUpdate(true);
   }, [
     tableArray,
@@ -274,7 +291,7 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
   // run layout computation initially and whenever relevant inputs change
   useEffect(() => {
     computeAndApplyLayout();
-  }, [computeAndApplyLayout, update]);
+  }, [computeAndApplyLayout]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -386,6 +403,7 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
       compact: boxCompact,
     };
 
+    console.log(subsetTables);
     const testData = inputDataToNodeAndEdges(subsetTables, { type: layoutType, options: layoutOptions });
 
     // map returned positions back into the existing nodes state

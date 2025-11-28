@@ -12,48 +12,50 @@ import { useEffect, useState } from 'react';
 
 function MainPage() {
 
-    const forceUpdate = useTableStore((state) => state.forceUpdate);
-    const tableArray = useTableStore((state) => state.tableArray);
-    const updateTablePositions = useTableStore((state) => state.updateTablePositions);
-    const update = useTableStore((state) => state.update);
+  const forceUpdate = useTableStore((state) => state.forceUpdate);
+  const tableArray = useTableStore((state) => state.tableArray);
+  const updateTablePositions = useTableStore((state) => state.updateTablePositions);
+  const update = useTableStore((state) => state.update);
 
-    const { toggleColorScheme } = useMantineColorScheme();
+  const { toggleColorScheme } = useMantineColorScheme();
 
-    useHotkeys([
-        ['mod+J', () => toggleColorScheme()],
-    ]);
+  useHotkeys([
+    ['mod+J', () => toggleColorScheme()],
+  ]);
 
-    useEffect(() => {
-        console.log("Updated tableArray");
-    }, [update, tableArray]);
+  useEffect(() => {
+    console.log("Updated tableArray");
+  }, [update, tableArray]);
 
-    return (
-        <>
-            <LoadingOverlay
-                visible={forceUpdate}
-                zIndex={1000}
-                overlayProps={{ radius: "sm", blur: 2 }}
+  console.log(tableArray);
+
+  return (
+    <>
+      <LoadingOverlay
+        visible={forceUpdate}
+        zIndex={1000}
+        overlayProps={{ radius: "sm", blur: 2 }}
+      />
+
+      <NavBar />
+      <Split>
+
+        <div style={{ width: '20%' }}>
+          <LeftNavBar />
+        </div>
+
+        {!forceUpdate && (
+          <div style={{ width: '80%', height: "93vh" }}>
+            <ERTableComp
+              tableArray={tableArray}
+              updateTablePositions={updateTablePositions}
             />
+          </div>
+        )}
 
-            <NavBar />
-            <Split>
-
-                <div style={{ width: '20%' }}>
-                    <LeftNavBar />
-                </div>
-
-                {!forceUpdate && (
-                    <div style={{ width: '80%', height: "93vh" }}>
-                        <ERTableComp
-                            tableArray={tableArray}
-                            updateTablePositions={updateTablePositions}
-                        />
-                    </div>
-                )}
-
-            </Split>
-        </>
-    )
+      </Split>
+    </>
+  )
 }
 
 export default MainPage

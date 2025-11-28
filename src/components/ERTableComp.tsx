@@ -17,7 +17,7 @@ import CustomEdge from './edges/CustomEdge';
 import { Badge, Group, Select, Slider, Stack, Text, Collapse, Switch, Tooltip, ColorInput, rgba, ActionIcon } from '@mantine/core';
 import { IconEye, IconEyeOff, IconX } from '@tabler/icons-react';
 
-import { inputDataToNodeAndEdges, LayoutType } from '../utilis/inputData/inputDataToNode';
+import { inputDataToNodeAndEdges, LayoutType } from '../utils/inputData/inputDataToNode';
 import { Table, TablePosition } from '../interface/inputData';
 
 import useTableStore from '../store/zustandStore';
@@ -239,32 +239,39 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
     const testData = inputDataToNodeAndEdges(tableArray, { type: layoutType, options: layoutOptions });
 
     // apply per-node React Flow style for background color so nodes pick up color via node.style
+    // Utility to determine best contrast color (black or white) for a given background
+    function getContrastYIQ(hexcolor: string) {
+      let color = hexcolor.replace('#', '');
+      if (color.length === 3) {
+        color = color.split('').map(c => c + c).join('');
+      }
+      const r = parseInt(color.substr(0, 2), 16);
+      const g = parseInt(color.substr(2, 2), 16);
+      const b = parseInt(color.substr(4, 2), 16);
+      const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+      return (yiq >= 128) ? '#000000' : '#FFFFFF';
+    }
+
+    const textColor = getContrastYIQ(tableBackgroundColor);
+
     const styledNodes = testData.nodes.map(n => ({
       ...n,
       style: {
         ...(n.style || {}),
         background: tableBackgroundColor,
         backgroundColor: tableBackgroundColor,
+        color: textColor,
       },
       data: {
         ...(n.data || {}),
         __background: tableBackgroundColor,
+        __textColor: textColor,
       }
     }));
 
     // Merge new positions/styles into existing nodes to preserve filtered/dimmed state
-    updateNodes(prevNodes =>
-      prevNodes.map(node => {
-        const updated = styledNodes.find(n => n.id === node.id);
-        if (!updated) return node;
-        return {
-          ...node,
-          position: updated.position,
-          style: { ...(node.style || {}), ...(updated.style || {}) },
-          data: { ...(node.data || {}), ...(updated.data || {}) },
-        };
-      })
-    );
+    // Replace nodes state with the full set of generated nodes to ensure all tables are added
+    setNodes(styledNodes);
     setEdges(testData.edges);
     setShouldFitOnUpdate(true);
   }, [

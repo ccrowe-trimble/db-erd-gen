@@ -6,7 +6,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useForm } from '@mantine/form';
 import { Tooltip, ActionIcon, Modal, Group, Button, TextInput, Grid, Switch, Select, Center } from "@mantine/core";
 
-import { IconSquarePlus, IconEdit, IconTrash, IconDeviceFloppy, IconGripVertical, IconRefresh } from '@tabler/icons-react';
+import { IconSquarePlus, IconEdit, IconTrash, IconDeviceFloppy, IconGripVertical, IconRefresh, IconGhost } from '@tabler/icons-react';
 import useTableStore from "../../../store/zustandStore";
 
 import { uuidGen } from "../../../utils/uuidGen";
@@ -32,9 +32,9 @@ interface FormColumns {
   relationship: null | string
 }
 
-function initDataGenerator(mode: "create" | "edit", editData?: Table): FormObject {
+function initDataGenerator(mode: "view_all" | "view_linked", editData?: Table): FormObject {
 
-  if (mode === "edit" && !!editData) {
+  if (mode === "view_linked" && !!editData) {
 
     return {
       tableName: editData.name,
@@ -78,14 +78,14 @@ interface FormObject {
 }
 
 type TableFormProps = {
-  mode: "create" | "edit"
+  mode: "view_all" | "view_linked"
   allTableData: Table[]
   editData?: Table // Optional if creating table 
 
   [x: string]: any; // For ActionIcon
 };
 
-function AnotherTableForm({ mode = "create", allTableData, editData, ...rest }: TableFormProps) {
+function BtnGhost({ mode = "view_all", allTableData, editData, ...rest }: TableFormProps) {
 
   const [opened, setOpened] = useState<boolean>(false);
 
@@ -134,92 +134,7 @@ function AnotherTableForm({ mode = "create", allTableData, editData, ...rest }: 
             </Group>
           </Grid.Col>
 
-          <Grid.Col span={{ base: 2, md: 2 }}>
-            <TextInput
-              withAsterisk
-              label="Column name"
-              placeholder="id"
-              {...form.getInputProps(`columns.${index}.name`)}
-            />
-          </Grid.Col>
 
-          <Grid.Col span={{ base: 2, md: 2 }}>
-            <Select
-              label={<div style={{ display: "inline-block" }}><ColumnTypeList /></div>}
-              placeholder="integer"
-              withAsterisk
-              searchable
-              data={groupedPostgresTypeArray}
-              {...form.getInputProps(`columns.${index}.dataType`)}
-            />
-          </Grid.Col>
-
-          <Grid.Col span={{ base: 3, md: 3 }}>
-            <Group mt={12}>
-              <Switch
-                mt={10}
-                label="PK" size="xs"
-                {...form.getInputProps(`columns.${index}.isPrimaryKey`, { type: 'checkbox' })}
-              />
-
-              <Switch
-                mt={10}
-                label="FK" size="xs"
-                disabled={allTableData.length <= 1 && mode === "edit"}
-                {...form.getInputProps(`columns.${index}.isForeignKey`, { type: 'checkbox' })}
-              />
-            </Group>
-
-            <Group>
-              <Switch
-                mt={10}
-                label="Unique" size="xs"
-                {...form.getInputProps(`columns.${index}.unique`, { type: 'checkbox' })}
-              />
-
-              <Switch
-                mt={10}
-                label="Not Null" size="xs"
-                {...form.getInputProps(`columns.${index}.notNull`, { type: 'checkbox' })}
-              />
-            </Group>
-          </Grid.Col>
-
-          {form.values.columns[index].isForeignKey
-            ? (
-              <>
-                <Grid.Col span={{ base: 2, md: 2 }}>
-                  <Select
-                    label="FK Table name"
-                    placeholder="name"
-                    withAsterisk
-                    disabled={allTableData.length <= 1 && mode === "edit"}
-                    data={
-                      Array.isArray(allTableData)
-                        ? allTableData.map(v => ({ value: v.name, label: v.name, disabled: v.name === form.values.tableName }))
-                        : []
-                    }
-                    {...form.getInputProps(`columns.${index}.foreignTo.name`)}
-                  />
-                </Grid.Col>
-
-                <Grid.Col span={{ base: 2, md: 2 }}>
-                  <Select
-                    label="FK Column"
-                    placeholder="id"
-                    withAsterisk
-                    disabled={!form.values.columns[index].foreignTo!.name}
-                    data={
-                      form.values.columns[index].foreignTo!.name
-                        ? allTableData.filter(v => v.name === form.values.columns[index].foreignTo!.name)[0].columns.map(v => v.name)
-                        : []
-                    }
-                    {...form.getInputProps(`columns.${index}.foreignTo.column`)}
-                  />
-                </Grid.Col>
-              </>)
-            : (<Grid.Col span={{ base: 3, md: 3 }}><></></Grid.Col>)
-          }
 
         </Grid>
       )}
@@ -273,21 +188,6 @@ function AnotherTableForm({ mode = "create", allTableData, editData, ...rest }: 
         })
       } as Table
 
-      // Create table
-      if (mode === "create") {
-
-        // Table name already exist
-        if (allTableData.map(v => v.name).indexOf(values.tableName) >= 0) {
-          failedDeleteMessage("Table name already exist")
-          return
-        }
-
-        addTableObjStore(storeObj);
-      }
-      else if (mode === "edit") { // Edit table
-        updateTableObj(storeObj);
-        forceUpdateToggle();
-      }
 
       setOpened(false);
       commonSuccessActions();
@@ -306,7 +206,7 @@ function AnotherTableForm({ mode = "create", allTableData, editData, ...rest }: 
         size="95%"
         opened={opened}
         onClose={() => setOpened(false)}
-        title={mode === "create" ? "Create table" : "Edit table"}
+        title="toggle view"
       >
         <form onSubmit={form.onSubmit((values) => handleSubmit(values))}>
 
@@ -314,7 +214,7 @@ function AnotherTableForm({ mode = "create", allTableData, editData, ...rest }: 
             withAsterisk
             label="Table name"
             placeholder="some_table_name"
-            disabled={mode === "edit"}
+
             description="Table Name Can not be change after created"
             {...form.getInputProps('tableName')}
           />
@@ -384,9 +284,9 @@ function AnotherTableForm({ mode = "create", allTableData, editData, ...rest }: 
       </Modal>
 
       <Group justify="center">
-        <Tooltip label={mode === "create" ? "Add something" : "Edit something"}>
+        <Tooltip label={"Toggle View"}>
           <ActionIcon variant="light" onClick={() => setOpened(true)} size="md" {...rest}>
-            {mode === "create" ? <IconTrash size={20} /> : <IconTrash size={18} />}
+            <IconGhost size={20} />
           </ActionIcon>
         </Tooltip>
       </Group>
@@ -394,4 +294,4 @@ function AnotherTableForm({ mode = "create", allTableData, editData, ...rest }: 
   );
 }
 
-export default AnotherTableForm;
+export default BtnGhost;

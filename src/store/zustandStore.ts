@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { Table, TablePosition } from '../interface/inputData';
 import { grandData } from '../data/testInputData';
 import { devtools, persist } from 'zustand/middleware'
-import { failedDelete } from '../utilis/notificationUtilis';
+import { failedDelete } from '../utils/notificationUtils';
 
 interface DataState {
     tableArray: Table[]

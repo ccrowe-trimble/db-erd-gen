@@ -74,12 +74,14 @@ export function inputDataToNodeAndEdges(
 
     // Apply layout algorithm if not linear
     let positionedNodes = initNodes;
+    
     if (layoutConfig.type !== 'linear') {
-        switch (layoutConfig.type) {
-            case 'circular':
-                positionedNodes = calculateCircularLayout(initNodes, layoutConfig.options);
-                break;
-            case 'x':
+      switch (layoutConfig.type) {
+        case 'circular':
+          positionedNodes = calculateCircularLayout(initNodes, layoutConfig.options);
+          break;
+          case 'x':
+              console.log('initNodes', initNodes);
                 positionedNodes = calculateXLayout(initNodes, { offset: layoutConfig.options?.offset, centerX: layoutConfig.options?.centerX, y: layoutConfig.options?.centerY ?? 0 });
                 break;
             case 'y':

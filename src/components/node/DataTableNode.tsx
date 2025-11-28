@@ -5,11 +5,13 @@ import TableForm from '../leftBar/components/TableForm';
 import useTableStore from '../../store/zustandStore';
 import useUISettingsStore from '../../store/uiSettingsStore';
 import AnotherTableForm from '../leftBar/components/AnotherTableForm';
+import BtnGhost from '../leftBar/components/BtnGhost';
 
 type DataTableNodeProps = NodeProps<Table>;
 
-function DataTableNode({ data }: DataTableNodeProps) {
+import { forwardRef } from 'react';
 
+const DataTableNode = forwardRef<HTMLDivElement, DataTableNodeProps>(function DataTableNode({ data }, ref) {
   const tableArray = useTableStore((state) => state.tableArray);
   const showDataTypes = useUISettingsStore((s: any) => s.showDataTypes ?? true);
   const tableBackgroundColor = useUISettingsStore((s: any) => s.tableBackgroundColor ?? '#ffffff');
@@ -19,9 +21,17 @@ function DataTableNode({ data }: DataTableNodeProps) {
 
   return (
     <Card
+      ref={ref}
       shadow="sm"
       radius="md"
-      style={{ background: bg, height: `${47 + data.columns.length * 28}px`, padding: "10px", fontSize: "2px", width: "320px" }}
+      style={{
+        background: bg,
+        color: (data as any).__textColor || (bg === "#000000" ? "#FFFFFF" : "#000000"),
+        height: `${47 + data.columns.length * 28}px`,
+        padding: "10px",
+        fontSize: "2px",
+        width: "320px"
+      }}
     >
       <div>
 
@@ -37,7 +47,8 @@ function DataTableNode({ data }: DataTableNodeProps) {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                color: (data as any).__textColor || (bg === "#000000" ? "#FFFFFF" : "#000000")
               }}
               leftSection={<div>{data.name}
                 {data && !(data as any).isIsolated && (
@@ -46,6 +57,15 @@ function DataTableNode({ data }: DataTableNodeProps) {
               </div>}
               rightSection={
                 <div style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'row' }}>
+                  <BtnGhost
+                    mode={'view_linked'}
+                    editData={data}
+                    allTableData={tableArray}
+
+                    size={14}
+                    color={"white"}
+                  />
+                  <span>&nbsp;</span>
                   <TableForm
                     mode={'edit'}
                     editData={data}
@@ -54,7 +74,7 @@ function DataTableNode({ data }: DataTableNodeProps) {
                     size={14}
                     color={"white"}
                   />
-
+                  <span>&nbsp;</span>
                   <AnotherTableForm
                     mode={'edit'}
                     editData={data}
@@ -141,6 +161,6 @@ function DataTableNode({ data }: DataTableNodeProps) {
       </div>
     </Card>
   );
-}
+});
 
-export default DataTableNode
+export default DataTableNode;

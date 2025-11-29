@@ -30,7 +30,7 @@ export function inputDataToNodeAndEdges(
     const initNodes: Node[] = [];
     const initialEdges: Edge[] = [];
 
-    let initTableDistance: number = 200;
+    let initTableDistance: number = 320;
 
     for(let table of tablesArr){
 
@@ -72,6 +72,17 @@ export function inputDataToNodeAndEdges(
         initTableDistance += 250;
     }
 
+    // Refactored: Remove edges with missing nodes efficiently
+    for (let i = initialEdges.length - 1; i >= 0; i--) {
+        const e = initialEdges[i];
+        const sourceNode = initNodes.find(n => n.id === e.source);
+        const targetNode = initNodes.find(n => n.id === e.target);
+        if (!sourceNode || !targetNode) {
+            console.warn(`Edge with missing node: ${e.id}, source: ${e.source}, target: ${e.target}`);
+            initialEdges.splice(i, 1);
+        }
+    }
+
     // Apply layout algorithm if not linear
     let positionedNodes = initNodes;
     
@@ -81,15 +92,23 @@ export function inputDataToNodeAndEdges(
           // Separate linked and isolated nodes
           // Only include nodes that are present in at least one edge as source or target
           const edgeNodeIds = new Set<string>();
-          initialEdges.forEach(e => {
+            initialEdges.forEach((e: Edge) => {
             edgeNodeIds.add(e.source);
             edgeNodeIds.add(e.target);
           });
           // A node is isolated only if it has NO incoming AND NO outgoing edges
           const linkedNodes = initNodes.filter(n => edgeNodeIds.has(n.id));
-          const isolatedNodes = initNodes.filter(n =>
+            const isolatedNodes = initNodes.filter(n =>
             !initialEdges.some(e => e.source === n.id || e.target === n.id)
           );
+          
+          initNodes.forEach(n => {            
+            n.data.isIsolated = true;
+          });
+
+          isolatedNodes.forEach(n => {            
+            n.data.isIsolated = false;
+          });
 
           // Circular layout for linked nodes
           // Defensive: filter out any nodes that are not actually linked by an edge
@@ -98,18 +117,20 @@ export function inputDataToNodeAndEdges(
           let markedGridNodes: Node[] = [];
 
           // Grid layout for isolated nodes (reuse box layout, above centerY)
-          let gridNodes: Node[] = [];
+          let IsolatedNodes: Node[] = [];
           if (isolatedNodes.length > 0) {
             const gridOptions = {
               ...(layoutConfig.options || {}),
-              centerY: (layoutConfig.options?.centerY ?? 300) - (layoutConfig.options?.radius ?? 300) - 220,
-              offsetY: 10,
-              offsetX: 220,
+              centerY: 0,
+              offsetY: 0,
               compact: false
             };
-            gridNodes = calculateBoxLayout(isolatedNodes, gridOptions);
+            IsolatedNodes = calculateXLayout(isolatedNodes, gridOptions);
+
+
+
             // Mark isolated nodes for debug/inspection
-            markedGridNodes = gridNodes.map(n => ({
+            markedGridNodes = IsolatedNodes.map(n => ({
               ...n,
               data: {
                 ...n.data,
@@ -120,9 +141,10 @@ export function inputDataToNodeAndEdges(
                 y: Math.min(n.position.y, (layoutConfig.options?.centerY ?? 300) - (layoutConfig.options?.radius ?? 300) - 80)
               }
             }));
+
           }
 
-          positionedNodes = [...circularNodes, ...gridNodes];
+          positionedNodes = [...circularNodes, ...IsolatedNodes];
           break;
         }
           case 'x':
@@ -153,8 +175,20 @@ export function inputDataToNodeAndEdges(
         }));
     }
 
+    // Filter edges: keep only those where there are exactly 2 matching edges between the same source and target, or none
+    const edgeCountMap = new Map<string, number>();
+    initialEdges.forEach(e => {
+        const key = e.source < e.target ? `${e.source}|${e.target}` : `${e.target}|${e.source}`;
+        edgeCountMap.set(key, (edgeCountMap.get(key) || 0) + 1);
+    });
+
+    const filteredEdges = initialEdges.filter(e => {
+        const key = e.source < e.target ? `${e.source}|${e.target}` : `${e.target}|${e.source}`;
+        return edgeCountMap.get(key) === 2 || edgeCountMap.get(key) === 0;
+    });
+
     return {
         nodes: positionedNodes,
-        edges: initialEdges
+        edges: filteredEdges
     }
 }

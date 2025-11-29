@@ -50,7 +50,8 @@ const DataTableNode = forwardRef<HTMLDivElement, DataTableNodeProps>(function Da
                 boxSizing: 'border-box',
                 color: (data as any).__textColor || (bg === "#000000" ? "#FFFFFF" : "#000000")
               }}
-              leftSection={<div>{data.name}
+              leftSection={<div>{data.position?.x.toFixed(0)}, {data.position?.y.toFixed(0)}
+                {/* {data.name} */}
                 {data && !(data as any).isIsolated && (
                   <Badge size="xs" color="gray" variant="light" style={{ pointerEvents: 'none' }}>isolated</Badge>
                 )}

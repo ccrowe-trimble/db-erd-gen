@@ -70,9 +70,10 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
   const [shouldFitOnUpdate, setShouldFitOnUpdate] = useState(false);
 
   // Layout configuration state
-  const [circularRadius, setCircularRadius] = useState(800);
+  const [circularRadius, setCircularRadius] = useState(500);
   // New X/Y/Box layout options
   const [xyOffset, setXyOffset] = useState(200); // used for X and Y layouts
+  const [circularOffsetX, setCircularOffsetX] = useState(50);
   const [boxOffsetX, setBoxOffsetX] = useState(200);
   const [boxOffsetY, setBoxOffsetY] = useState(150);
   // persisted compact mode for box layout
@@ -150,25 +151,27 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
   }, []);
 
   // compute and apply layout — extracted so we can call it on demand (Reformat button) or from effects
+  // layoutOptions is now available at component scope for all callbacks
+  const layoutOptions = {
+    radius: circularRadius,
+    repulsionForce: forceRepulsion,
+    repulsionMultiplier: forceRepulsionMultiplier,
+    attractionForce: forceAttraction,
+    iterations: forceIterations,
+    centerX: forceCenterX,
+    centerY: forceCenterY,
+    damping: forceDamping,
+    minDistance: forceMinDistance,
+    nodeSpacing: hierarchicalNodeSpacing,
+    levelSpacing: hierarchicalLevelSpacing,
+    // X/Y/Box options
+    offset: xyOffset,
+    offsetX: boxOffsetX,
+    offsetY: boxOffsetY,
+    compact: boxCompact,
+  };
+
   const computeAndApplyLayout = useCallback((viewportOnly: boolean = false) => {
-    const layoutOptions = {
-      radius: circularRadius,
-      repulsionForce: forceRepulsion,
-      repulsionMultiplier: forceRepulsionMultiplier,
-      attractionForce: forceAttraction,
-      iterations: forceIterations,
-      centerX: forceCenterX,
-      centerY: forceCenterY,
-      damping: forceDamping,
-      minDistance: forceMinDistance,
-      nodeSpacing: hierarchicalNodeSpacing,
-      levelSpacing: hierarchicalLevelSpacing,
-      // X/Y/Box options
-      offset: xyOffset,
-      offsetX: boxOffsetX,
-      offsetY: boxOffsetY,
-      compact: boxCompact,
-    };
     // If viewportOnly is requested, try to compute which nodes are visible in the
     // current React Flow viewport and only run layout for those. We rely on
     // rfInstance.project to translate screen coords to flow coordinates. If the
@@ -313,9 +316,18 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
   );
 
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
-    [setEdges, tableArray]
+    (changes: EdgeChange[]) => {
+      setEdges((eds) => applyEdgeChanges(changes, eds));
+    },
+    [setEdges]
   );
+
+  // Recalculate layout whenever edges, tableArray, layoutType, or layoutOptions change
+  useEffect(() => {
+    const layoutResult = inputDataToNodeAndEdges(tableArray, { type: layoutType, options: layoutOptions });
+    setNodes(layoutResult.nodes);
+    setEdges(layoutResult.edges);
+  }, [tableArray, layoutType, layoutOptions]);
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setHighlightedNodeId(node.id);
@@ -562,6 +574,20 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
                   />
                   <Text size="xs" w={40}>{circularRadius}</Text>
                 </Group>
+                <Group gap="xs" align="center">
+                  <Text size="xs" w={80}>Offset X:</Text>
+                  <Slider
+                    size="xs"
+                    min={0}
+                    max={800}
+                    step={50}
+                    value={circularOffsetX}
+                    onChange={setCircularOffsetX}
+                    style={{ width: 140 }}
+                  />
+                  <Text size="xs" w={40}>{circularOffsetX}</Text>
+                </Group>
+
               </div>
             )}
 

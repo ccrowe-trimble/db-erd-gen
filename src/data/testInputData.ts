@@ -2,16 +2,6 @@ import { Table } from "../interface/inputData";
 
 export const importString = `
 [
-{
-    "name": "core.accounts",
-    "columns": [{"name":"id","dataType":"nvarchar(255)","isPrimaryKey":true,"notNull":true,"unique":false},{"name":"currency_id","dataType":"nvarchar(3)","isPrimaryKey":false,"notNull":true,"unique":false,"foreignTo":{"name":"core.currencies","column":"id"}},{"name":"company_name","dataType":"nvarchar(255)","isPrimaryKey":false,"notNull":true,"unique":false},{"name":"pricing_country_code","dataType":"nvarchar(2)","isPrimaryKey":false,"notNull":true,"unique":false},{"name":"is_primary","dataType":"bit","isPrimaryKey":false,"notNull":true,"unique":false},{"name":"meta_created_datetime","dataType":"datetime2","isPrimaryKey":false,"notNull":true,"unique":false},{"name":"meta_updated_datetime","dataType":"datetime2","isPrimaryKey":false,"notNull":false,"unique":false}],
-    "position": {"x":1050,"y":0}
-},
-{
-    "name": "core.addresses",
-    "columns": [{"name":"id","dataType":"nvarchar(255)","isPrimaryKey":true,"notNull":true,"unique":false},{"name":"address1","dataType":"nvarchar(255)","isPrimaryKey":false,"notNull":true,"unique":false},{"name":"address2","dataType":"nvarchar(255)","isPrimaryKey":false,"notNull":false,"unique":false},{"name":"city","dataType":"nvarchar(255)","isPrimaryKey":false,"notNull":true,"unique":false},{"name":"state","dataType":"nvarchar(255)","isPrimaryKey":false,"notNull":false,"unique":false},{"name":"country","dataType":"nvarchar(255)","isPrimaryKey":false,"notNull":true,"unique":false},{"name":"zip","dataType":"nvarchar(255)","isPrimaryKey":false,"notNull":true,"unique":false},{"name":"meta_created_datetime","dataType":"datetime2","isPrimaryKey":false,"notNull":true,"unique":false},{"name":"meta_updated_datetime","dataType":"datetime2","isPrimaryKey":false,"notNull":false,"unique":false}],
-    "position": {"x":1400,"y":0}
-},
 
 {
     "name": "core.contract_lines",

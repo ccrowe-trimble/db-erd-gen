@@ -109,8 +109,7 @@ export function calculateHierarchicalLayout(
         positionedNodes[nodeIndex] = {
           ...positionedNodes[nodeIndex],
           data: {
-            ...positionedNodes[nodeIndex].data,
-            isIsolated: false
+            ...positionedNodes[nodeIndex].data
           },
           position: {
             x: startX + index * nodeSpacing,
@@ -141,8 +140,7 @@ export function calculateHierarchicalLayout(
       positionedNodes[nodeIndex] = {
         ...positionedNodes[nodeIndex],
         data: {
-          ...positionedNodes[nodeIndex].data,
-          isIsolated: true
+          ...positionedNodes[nodeIndex].data
         },
         position: {
           x: currentX + col * isolatedNodeSpacing,
@@ -162,7 +160,7 @@ export function calculateCircularLayout(
   nodes: Node[],
   options: { radius?: number; centerX?: number; centerY?: number } = {}
 ): Node[] {
-  const { radius = 300, centerX = 400, centerY = 300 } = options;
+  const { radius = 100, centerX = 400, centerY = 300 } = options;
 
   if (nodes.length === 0) return nodes;
 
@@ -332,16 +330,50 @@ export function calculateXLayout(
   nodes: Node[],
   options: { offset?: number; centerX?: number; y?: number } = {}
 ): Node[] {
-  const { offset = 200, centerX = 400, y = 0 } = options;
+  const { centerX = 400, y = -500 } = options;
   if (nodes.length === 0) return nodes;
 
-  const totalWidth = (nodes.length - 1) * offset;
+  // Compute widths for each node. Try to read numeric width from data or style, fall back to 320
+  const nodeWidths = nodes.map(node => {
+    try {
+      const wFromData = node.data && (node.data as any).width;
+      if (typeof wFromData === 'number') return wFromData;
+      if (typeof wFromData === 'string') {
+        const parsed = parseFloat(wFromData);
+        if (!isNaN(parsed)) return parsed;
+      }
+      const styleWidth = (node as any).style && (node as any).style.width;
+      if (typeof styleWidth === 'number') return styleWidth;
+      if (typeof styleWidth === 'string') {
+        const parsed = parseFloat(styleWidth);
+        if (!isNaN(parsed)) return parsed;
+      }
+      return 320;
+    } catch (e) {
+      return 320;
+    }
+  });
+
+  // Use the width of the first node as the offset between nodes
+  const singeNodeWidth = nodeWidths.length > 0 ? nodeWidths[0] : 320;
+
+  // Calculate total width: sum of all node widths + gaps between them (gap * (nodes.length - 1))
+  const totalWidth = singeNodeWidth * Math.max(0, nodes.length - 1);
   const startX = centerX - totalWidth / 2;
 
-  return nodes.map((node, index) => ({
-    ...node,
-    position: { x: startX + index * offset, y }
-  }));
+  // Place each node at the correct x position, spacing by its width and the gap
+  let xCursor = startX;
+  const positionedNodes = nodes.map((node, index) => {
+    const width = nodeWidths[index] || 320;
+    const positioned = {
+      ...node,
+      position: { x: xCursor + width / 2, y }
+    };
+    xCursor += width + singeNodeWidth;
+    return positioned;
+  });
+
+  return positionedNodes;
 }
 
 /**
@@ -555,4 +587,49 @@ export function calculateBoxLayout(
   }
 
   return positioned;
+
+}
+
+// Place nodes by rule and split by IsIsolated property
+export type LayoutRule = "circular" | "hierarchical" | "force" | "x" | "y" | "box" | "ccrowe";
+
+export function placeNodesByRule(
+  nodes: Node[],
+  edges: Edge[],
+  rule: LayoutRule,
+  options: LayoutOptions = {}
+): Node[] {
+  const isolated = nodes.filter(n => n.data?.IsIsolated);
+  const nonIsolated = nodes.filter(n => !n.data?.IsIsolated);
+
+  let layoutFn: (nodes: Node[], edges: Edge[], options: LayoutOptions) => Node[];
+  switch (rule) {
+    case "circular":
+      layoutFn = (ns, _e, opts) => calculateCircularLayout(ns, opts);
+      break;
+    case "force":
+      layoutFn = (ns, es, opts) => calculateForceDirectedLayout(ns, es, opts);
+      break;
+    case "x":
+      layoutFn = (ns, _e, opts) => calculateXLayout(ns, opts);
+      break;
+    case "y":
+      layoutFn = (ns, _e, opts) => calculateYLayout(ns, opts);
+      break;
+    case "box":
+      layoutFn = (ns, _e, opts) => calculateBoxLayout(ns, opts);
+      break;
+    case "hierarchical":
+    default:
+      layoutFn = (ns, es, opts) => calculateHierarchicalLayout(ns, es, opts);
+      break;
+  }
+
+  const positionedIsolated = isolated.length ? layoutFn(isolated, [], options) : [];
+  const positionedNonIsolated = nonIsolated.length ? layoutFn(nonIsolated, edges, options) : [];
+
+  // Combine results, preserving order
+  const positionedMap = new Map<string, Node>();
+  [...positionedIsolated, ...positionedNonIsolated].forEach(n => positionedMap.set(n.id, n));
+  return nodes.map(n => positionedMap.get(n.id) ?? n);
 }

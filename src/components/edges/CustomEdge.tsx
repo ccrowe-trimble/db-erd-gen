@@ -13,6 +13,7 @@ const CustomEdge: React.FC<EdgeProps> = ({
   sourcePosition,
   targetPosition,
 }) => {
+
   // Offset the targetX for the main edge path so it ends at the correct edge of the red line
   const RED_LINE_HALF = 10;
   // Calculate direction for horizontal offset
@@ -38,6 +39,7 @@ const CustomEdge: React.FC<EdgeProps> = ({
     targetY,
   });
 
+
   // Debug: log selected state changes
   React.useEffect(() => {
     console.log('Edge', id, 'selected:', selected);
@@ -55,7 +57,7 @@ const CustomEdge: React.FC<EdgeProps> = ({
     : {
       ...style,
       strokeWidth: 5,
-      stroke: '#666322', // Gray color for normal
+      stroke: 'lime', // Gray color for normal
     };
 
   return (
@@ -98,7 +100,7 @@ const CustomEdge: React.FC<EdgeProps> = ({
         y1={targetY}
         x2={targetLineEndX}
         y2={targetY}
-        stroke="red"
+        stroke="purple"
         strokeWidth={6}
       />
     </>

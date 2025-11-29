@@ -78,7 +78,7 @@ export function inputDataToNodeAndEdges(
         const sourceNode = initNodes.find(n => n.id === e.source);
         const targetNode = initNodes.find(n => n.id === e.target);
         if (!sourceNode || !targetNode) {
-            console.warn(`Edge with missing node: ${e.id}, source: ${e.source}, target: ${e.target}`);
+          //  console.warn(`Edge with missing node: ${e.id}, source: ${e.source}, target: ${e.target}`);
             initialEdges.splice(i, 1);
         }
     }

@@ -141,7 +141,7 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
       ...edge,
       style: {
         ...(edge.style || {}),
-        opacity: edge.source === highlightedNodeId || edge.target === highlightedNodeId ? 1 : 0.08,
+        opacity: edge.source === highlightedNodeId || edge.target === highlightedNodeId ? 1 : 0.3,
       },
     }));
   }, [edges, highlightedNodeId, highlightMode]);
@@ -152,7 +152,7 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
 
   // compute and apply layout — extracted so we can call it on demand (Reformat button) or from effects
   // layoutOptions is now available at component scope for all callbacks
-  const layoutOptions = {
+  const layoutOptions = useMemo(() => ({
     radius: circularRadius,
     repulsionForce: forceRepulsion,
     repulsionMultiplier: forceRepulsionMultiplier,
@@ -169,7 +169,23 @@ function ERTableComp({ tableArray, updateTablePositions }: ERTableProps) {
     offsetX: boxOffsetX,
     offsetY: boxOffsetY,
     compact: boxCompact,
-  };
+  }), [
+    circularRadius,
+    forceRepulsion,
+    forceRepulsionMultiplier,
+    forceAttraction,
+    forceIterations,
+    forceCenterX,
+    forceCenterY,
+    forceDamping,
+    forceMinDistance,
+    hierarchicalNodeSpacing,
+    hierarchicalLevelSpacing,
+    xyOffset,
+    boxOffsetX,
+    boxOffsetY,
+    boxCompact,
+  ]);
 
   const computeAndApplyLayout = useCallback((viewportOnly: boolean = false) => {
     // If viewportOnly is requested, try to compute which nodes are visible in the
